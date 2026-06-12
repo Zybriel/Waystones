@@ -26,8 +26,8 @@ public class WaystoneButton extends Button {
     private final int xpLevelCost;
     private final IWaystone waystone;
 
-    public WaystoneButton(int x, int y, IWaystone waystone, int xpLevelCost, OnPress pressable) {
-        super(x, y, 200, 20, getWaystoneNameComponent(waystone), pressable, Button.DEFAULT_NARRATION);
+    public WaystoneButton(int x, int y,int width ,int height, IWaystone waystone, int xpLevelCost, OnPress pressable) {
+        super(x, y, width, height, getWaystoneNameComponent(waystone), pressable, Button.DEFAULT_NARRATION);
         Player player = Minecraft.getInstance().player;
         this.xpLevelCost = xpLevelCost;
         this.waystone = waystone;
