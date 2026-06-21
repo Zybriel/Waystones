@@ -1,7 +1,6 @@
 package net.blay09.mods.waystones.client.gui.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.mixin.ScreenAccessor;
 import net.blay09.mods.waystones.api.IWaystone;
@@ -19,7 +18,6 @@ import net.blay09.mods.waystones.network.message.SortWaystoneMessage;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -28,7 +26,6 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -51,11 +48,15 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
 
     private Button btnPrevPage;
     private Button btnNextPage;
+    private Button btnChangeCol;
     private EditBox searchBox;
     private int pageOffset;
     private int headerY;
     private boolean isLocationHeaderHovered;
-    private int buttonsPerPage;
+    private int buttonsPerCol;
+
+    private static int buttonWidth = 200;
+    private static int columns = 1;
 
     private static final int headerHeight = 64;
     private static final int footerHeight = 25;
@@ -71,10 +72,10 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
 
     @Override
     public void init() {
-        final int maxContentHeight = (int) (height * 0.6f);
+        final int maxContentHeight = (int) (height * 0.85f);
         final int maxButtonsPerPage = (maxContentHeight - headerHeight - footerHeight) / entryHeight;
-        buttonsPerPage = Math.max(4, Math.min(maxButtonsPerPage, waystones.size()));
-        final int contentHeight = headerHeight + buttonsPerPage * entryHeight + footerHeight;
+        buttonsPerCol = Math.max(4, Math.min(maxButtonsPerPage, waystones.size()));
+        final int contentHeight = headerHeight + buttonsPerCol * entryHeight + footerHeight;
 
         // Leave no space for JEI!
         imageWidth = width;
@@ -90,10 +91,19 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
         addRenderableWidget(btnPrevPage);
 
         btnNextPage = Button.builder(Component.translatable("gui.waystones.waystone_selection.next_page"), button -> {
-            pageOffset = Screen.hasShiftDown() ? (waystones.size() - 1) / buttonsPerPage : pageOffset + 1;
+            pageOffset = Screen.hasShiftDown() ? (waystones.size() - 1) / buttonsPerCol : pageOffset + 1;
             updateList();
         }).pos(width / 2 + 5, height / 2 + 40).size(95, 20).build();
         addRenderableWidget(btnNextPage);
+
+        btnChangeCol = Button.builder(Component.literal(String.valueOf(columns)),  button -> {
+            pageOffset = 0;
+            columns = columns%3+1;
+            buttonWidth = 200 - (columns-1)*40;
+            button.setMessage(Component.literal(String.valueOf(columns)));
+            updateList();
+        }).pos(btnNextPage.getX() + btnNextPage.getWidth() + 5, btnNextPage.getY()).size(20, 20).build();
+        addRenderableWidget(btnChangeCol);
 
         updateList();
 
@@ -123,7 +133,7 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
         headerY = 0;
 
         btnPrevPage.active = pageOffset > 0;
-        btnNextPage.active = pageOffset < (filteredWaystones.size() - 1) / buttonsPerPage;
+        btnNextPage.active = pageOffset < (filteredWaystones.size() - 1) / (buttonsPerCol*columns);
 
         tooltipProviders.clear();
 
@@ -132,22 +142,35 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
         ((ScreenAccessor) this).balm_getNarratables().removeIf(removePredicate);
         ((ScreenAccessor) this).balm_getRenderables().removeIf(removePredicate);
 
-        int y = topPos + headerHeight + headerY;
-        for (int i = 0; i < buttonsPerPage; i++) {
-            int entryIndex = pageOffset * buttonsPerPage + i;
+
+        int x = width / 2 - 100;
+
+        if (columns == 2){
+            x = width / 2 - 200;
+        }
+        if (columns == 3){
+            x = width / 2 - 235;
+        }
+        int starty = topPos + headerHeight + headerY;
+        int y = starty;
+        for (int i = 0; i < buttonsPerCol * columns; i++) {
+            int entryIndex = pageOffset * buttonsPerCol * columns + i;
             if (entryIndex >= 0 && entryIndex < filteredWaystones.size()) {
                 IWaystone waystone = filteredWaystones.get(entryIndex);
 
-                addRenderableWidget(createWaystoneButton(y, waystone));
+
+                WaystoneButton waystoneButton = createWaystoneButton(x, y, waystone);
+                addRenderableWidget(waystoneButton);
 
                 if (allowSorting()) {
-                    SortWaystoneButton sortUpButton = new SortWaystoneButton(width / 2 + 108, y + 2, -1, y, 20, it -> sortWaystone(entryIndex, -1));
+                    // size = 11 * 7
+                    SortWaystoneButton sortUpButton = new SortWaystoneButton(waystoneButton.getX()+waystoneButton.getWidth()+8, y + 2, -1, y, 20, it -> sortWaystone(entryIndex, -1));
                     if (entryIndex == 0) {
                         sortUpButton.active = false;
                     }
                     addRenderableWidget(sortUpButton);
 
-                    SortWaystoneButton sortDownButton = new SortWaystoneButton(width / 2 + 108, y + 13, 1, y, 20, it -> sortWaystone(entryIndex, 1));
+                    SortWaystoneButton sortDownButton = new SortWaystoneButton(waystoneButton.getX()+waystoneButton.getWidth()+8, y + 13, 1, y, 20, it -> sortWaystone(entryIndex, 1));
                     if (entryIndex == filteredWaystones.size() - 1) {
                         sortDownButton.active = false;
                     }
@@ -155,7 +178,8 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
                 }
 
                 if (allowDeletion()) {
-                    RemoveWaystoneButton removeButton = new RemoveWaystoneButton(width / 2 + 122, y + 4, y, 20, waystone, button -> {
+                    // size = 13 * 13
+                    RemoveWaystoneButton removeButton = new RemoveWaystoneButton(waystoneButton.getX()+waystoneButton.getWidth()+22, y + 4, y, 20, waystone, button -> {
                         Player player = Minecraft.getInstance().player;
                         PlayerWaystoneManager.deactivateWaystone(Objects.requireNonNull(player), waystone);
                         Balm.getNetworking().sendToServer(new RemoveWaystoneMessage(waystone.getWaystoneUid()));
@@ -168,21 +192,29 @@ public abstract class WaystoneSelectionScreenBase extends AbstractContainerScree
                 }
 
                 y += 22;
+                if ( (i + 1) % buttonsPerCol == 0){
+                    if(columns == 2) x += 200;
+                    else if (columns == 3) x += 160;
+                    y =starty;
+                }
             }
         }
 
-        btnPrevPage.setY(topPos + headerY + headerHeight + buttonsPerPage * 22 + (filteredWaystones.size() > 0 ? 10 : 0));
-        btnNextPage.setY(topPos + headerY + headerHeight + buttonsPerPage * 22 + (filteredWaystones.size() > 0 ? 10 : 0));
+        int btnY = topPos + headerY + headerHeight + buttonsPerCol * 22 + (filteredWaystones.size() > 0 ? 10 : 0);
+        btnPrevPage.setY(btnY);
+        btnNextPage.setY(btnY);
+        btnChangeCol.setY(btnY);
+
     }
 
-    private WaystoneButton createWaystoneButton(int y, final IWaystone waystone) {
+    private WaystoneButton createWaystoneButton(int x,int y, final IWaystone waystone) {
         IWaystone waystoneFrom = menu.getWaystoneFrom();
         Player player = Minecraft.getInstance().player;
         int xpLevelCost = Math.round(PlayerWaystoneManager.predictExperienceLevelCost(Objects.requireNonNull(player),
                 waystone,
                 menu.getWarpMode(),
                 waystoneFrom));
-        WaystoneButton btnWaystone = new WaystoneButton(width / 2 - 100, y, waystone, xpLevelCost, button -> onWaystoneSelected(waystone));
+        WaystoneButton btnWaystone = new WaystoneButton(x, y, buttonWidth,waystone, xpLevelCost, button -> onWaystoneSelected(waystone));
         if (waystoneFrom != null && waystone.getWaystoneUid().equals(waystoneFrom.getWaystoneUid())) {
             btnWaystone.active = false;
         }
